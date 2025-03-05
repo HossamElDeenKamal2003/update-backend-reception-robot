@@ -51,10 +51,7 @@ const labsSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    subscribeDelivery: {
-      type: String,
-      default: "lab",
-    },
+
     contracts: {
       type: [
         {
@@ -72,6 +69,12 @@ const labsSchema = new mongoose.Schema(
       ],
       default: [], // Default to an empty array
     },
+      doctors: {
+        type: []
+      },
+      otp: { type: String },
+      otpExpiresAt: { type: Date },
+      isVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

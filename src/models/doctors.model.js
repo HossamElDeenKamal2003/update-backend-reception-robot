@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+
 const doctorSchema = new mongoose.Schema({
     UID: {
         type: String,
@@ -11,26 +12,25 @@ const doctorSchema = new mongoose.Schema({
     },
     phoneNumber: {
         type: String,
-        require: true,
+        required: true,
         unique: true
     },
     email: {
-        type: String,
         type: String,
         unique: true
     },
     buildNo: {
         type: String,
-        require: true
+        required: true
     },
-    floorNo:{
+    floorNo: {
         type: String,
-        require: String,
+        required: true
     },
     coverImage: {
         type: String
     },
-    address:{
+    address: {
         type: String
     },
     profileImage: {
@@ -38,13 +38,15 @@ const doctorSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        reuire: true
+        required: true
     },
     favouritePosts: {
-        type:[]
+        type: Array,
+        default: []
     },
     posts: {
-        type: []
+        type: Array,
+        default: []
     },
     role: {
         type: String,
@@ -54,11 +56,16 @@ const doctorSchema = new mongoose.Schema({
         type: [mongoose.Schema.Types.ObjectId],
         ref: "labs",
         default: [],
-    }
-
+    },
+    orders: {
+        type: [mongoose.Schema.Types.ObjectId],
+        ref: "orders",
+        default: []
+    },
+    otp: { type: String },
+    otpExpiresAt: { type: Date },
+    isVerified: { type: Boolean, default: false },
 }, { timestamps: true });
 
 const doctorsModel = mongoose.model('doctors', doctorSchema);
 module.exports = doctorsModel;
-
-

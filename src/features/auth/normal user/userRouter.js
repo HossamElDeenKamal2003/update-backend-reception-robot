@@ -8,8 +8,8 @@ const {
     changePasswordController,
     forgetPasswordController,
     verifyOTPController,
-    getDoctordataController
-} = require("./doctorController");
+    getUserDataController,
+} = require("./userController");
 
 // Register Route
 router.post("/register", registerController);
@@ -25,5 +25,8 @@ router.post("/forget-password", forgetPasswordController);
 
 // Verify OTP Route
 router.post("/verify-otp", verifyOTPController);
-router.get('/get-doctor-data', getDoctordataController);
+
+// Get User Data Route
+router.get("/get-user-data", getUserDataController);
+
 module.exports = router;

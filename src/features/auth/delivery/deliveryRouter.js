@@ -8,8 +8,8 @@ const {
     changePasswordController,
     forgetPasswordController,
     verifyOTPController,
-    getDoctordataController
-} = require("./doctorController");
+    getDeliveryDataController // ✅ Corrected name
+} = require("./deliveryController");
 
 // Register Route
 router.post("/register", registerController);
@@ -25,5 +25,8 @@ router.post("/forget-password", forgetPasswordController);
 
 // Verify OTP Route
 router.post("/verify-otp", verifyOTPController);
-router.get('/get-doctor-data', getDoctordataController);
+
+// Get Delivery Person Data Route
+router.get("/get-delivery-data", getDeliveryDataController); // ✅ Corrected route and function name
+
 module.exports = router;

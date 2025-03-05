@@ -10,7 +10,7 @@ const deliverySchema = new mongoose.Schema({
         required: true
     },
     password: {
-        type: string
+        type: String
     },
     favouritePosts: {
         type:[]
@@ -29,7 +29,10 @@ const deliverySchema = new mongoose.Schema({
     earnings: [{
         lab: { type: mongoose.Schema.Types.ObjectId, ref: "lab" },
         totalEarned: { type: Number, default: 0 } 
-    }]
+    }],
+    otp: { type: String },
+    otpExpiresAt: { type: Date },
+    isVerified: { type: Boolean, default: false },
 }, {timestamps: true});
 
 const deliveryModel = mongoose.model('delivery', deliverySchema);

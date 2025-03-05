@@ -1,12 +1,12 @@
 const asyncHandler = require("express-async-handler");
 const {
-    register: registerDoctor,
+    register,
     login,
     changePassword,
     forgetPassword,
     verifyOTP,
-    getDoctordata
-} = require("./doctorService.js");
+    getUserData,
+} = require("./userService");
 
 // Utility function for validating required fields
 const validateRequiredFields = (fields, res) => {
@@ -18,25 +18,25 @@ const validateRequiredFields = (fields, res) => {
     return null;
 };
 
-// Register Controller
+// Register User Controller
 const registerController = asyncHandler(async (req, res) => {
-    const { username, phoneNumber, email, buildNo, floorNo, address, password } = req.body;
+    const { username, phoneNumber, email, password } = req.body;
 
     const validationError = validateRequiredFields(
-        { username, phoneNumber, email, buildNo, floorNo, address, password },
+        { username, phoneNumber, email, password },
         res
     );
     if (validationError) return validationError;
 
     try {
-        const doctor = await registerDoctor(username, phoneNumber, email, buildNo, floorNo, address, password);
-        return res.status(201).json({ doctor });
+        const user = await register(username, phoneNumber, email, password);
+        return res.status(201).json({ user });
     } catch (error) {
         return res.status(error.statusCode || 500).json({ message: error.message || "Something went wrong" });
     }
 });
 
-// Login Controller
+// Login User Controller
 const loginController = asyncHandler(async (req, res) => {
     const { phoneNumber, email, password } = req.body;
 
@@ -100,20 +100,21 @@ const verifyOTPController = asyncHandler(async (req, res) => {
     }
 });
 
-const getDoctordataController = asyncHandler(async (req, res) => {
+// Get User Data Controller
+const getUserDataController = asyncHandler(async (req, res) => {
     const { phoneNumber } = req.body;
-    if(!phoneNumber){
+
+    if (!phoneNumber) {
         return res.status(400).json({ message: "Please provide phoneNumber" });
     }
-    try{
-        const doctor = await getDoctordata(phoneNumber);
-        return res.status(200).json({ doctor : doctor });
-    }
-    catch(error){
+
+    try {
+        const user = await getUserData(phoneNumber);
+        return res.status(200).json({ user });
+    } catch (error) {
         return res.status(error.statusCode || 500).json({ message: error.message });
     }
-
-})
+});
 
 module.exports = {
     registerController,
@@ -121,5 +122,5 @@ module.exports = {
     changePasswordController,
     forgetPasswordController,
     verifyOTPController,
-    getDoctordataController
+    getUserDataController,
 };

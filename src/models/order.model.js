@@ -7,6 +7,10 @@ const orderSchema = new mongoose.Schema(
       required: true,
       maxLength: 255,
     },
+    doctorId: {
+      type: String,
+      required: true,
+    },
     patientName: {
       type: String,
       required: true,
@@ -53,7 +57,7 @@ const orderSchema = new mongoose.Schema(
     rest: {
         type: Number
     },
-    lab_id: {
+    labId: {
       type: mongoose.Schema.ObjectId,
       ref: "labs",
       required: true,
@@ -76,19 +80,24 @@ const orderSchema = new mongoose.Schema(
       required: false,
       default: true,
     },
-    docReady: {
-      type: Boolean,
-      required: false,
-      default: false,
-    },
+    // docReady: {
+    //   type: Boolean,
+    //   required: false,
+    //   default: false,
+    // },
     media: {
-        type: []
+        type: [],
+        default: []
     },
     delivery: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "delivery",
-        required: true
+        // required: true
     },
+      prova:{
+        type: Boolean,
+          required: true,
+      }
   },
   { timestamps: true }
 );

@@ -1,23 +1,28 @@
 const labs = require("../../../models/labs.model");
 const bcrypt = require("bcryptjs");
+const doctorsModel = require("../../../models/doctors.model");
+const { sendWhatsAppOTP } = require("../../../config/whatsappClient");
 
-const register = async (username, phoneNumber, email, buildNo, floorNo, address, password, coverImage, profileImage, subscribeDelivery, role, contracts) => {
-    // Check if lab already exists
-    const existLab = await labs.findOne({
-        $or: [{ email }, { phoneNumber }]
-    });
-
-    if (existLab) {
-        const error = new Error("Lab already exists");
-        error.statusCode = 400; 
-        throw error;
-    }
-
-    // Hash password
+// Utility function to hash passwords
+const hashPassword = async (password) => {
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    return bcrypt.hash(password, salt);
+};
 
-    // Create new lab
+// Utility function to throw consistent errors
+const throwError = (message, statusCode) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    throw error;
+};
+
+// Register a new lab
+const register = async (username, phoneNumber, email, buildNo, floorNo, address, password, coverImage, profileImage, subscribeDelivery, role, contracts) => {
+    const existLab = await labs.findOne({ $or: [{ email }, { phoneNumber }] });
+    if (existLab) throwError("Lab already exists", 400);
+
+    const hashedPassword = await hashPassword(password);
+
     const newLab = new labs({
         username,
         phoneNumber,
@@ -37,42 +42,102 @@ const register = async (username, phoneNumber, email, buildNo, floorNo, address,
 
     await newLab.save();
 
-    return {
-        message: "Lab Created Successfully",
-        newLab
-    };
+    return { message: "Lab Created Successfully", newLab };
 };
 
+// Login a lab
 const login = async (phoneNumber, email, password) => {
-    let lab = null;
+    const lab = await labs.findOne(email ? { email } : { phoneNumber });
+    if (!lab) throwError("Lab not found", 401);
 
-    if (email) {
-        lab = await labs.findOne({ email });
-    } else {
-        lab = await labs.findOne({ phoneNumber });
-    }
-
-    console.log("Phone:", phoneNumber, "Email:", email);
-    console.log("Lab Found:", lab);
-
-    if (!lab) {
-        const error = new Error("Lab not found");
-        error.statusCode = 401;
-        throw error;
-    }
-
-    // Compare password
     const isMatch = await bcrypt.compare(password, lab.password);
-    if (!isMatch) {
-        const error = new Error("Incorrect Password");
-        error.statusCode = 401;
+    if (!isMatch) throwError("Incorrect Password", 401);
+
+    return { message: "Login Successful", lab };
+};
+
+// Change password for a doctor
+const changePassword = async (phoneNumber, oldPassword, newPassword) => {
+    try {
+        // Find doctor by phone number
+        const doctor = await labs.findOne({ phoneNumber });
+        if (!doctor) {
+            throw Object.assign(new Error("Doctor not found"), { statusCode: 401 });
+        }
+
+        // Check if old password matches
+        const isMatch = await bcrypt.compare(oldPassword, doctor.password);
+        if (!isMatch) {
+            throw Object.assign(new Error("Old password is incorrect"), { statusCode: 401 });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        // Update password
+        doctor.password = hashedPassword;
+        await doctor.save();
+
+        return { success: true, message: "Password changed successfully" };
+    } catch (error) {
         throw error;
     }
+};
 
-    return { message: "Login Successful",lab };
+// Forget password and send OTP
+const forgetPassword = async (phoneNumber) => {
+    const lab = await labs.findOne({ phoneNumber });
+    if (!lab) throwError("Doctor not found", 401);
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // OTP expires in 10 minutes
+
+    lab.otp = otp;
+    lab.otpExpiresAt = otpExpiresAt;
+    await lab.save();
+
+    const message = `Your password reset OTP is: ${otp}. It will expire in 10 minutes.`;
+    await sendWhatsAppOTP(phoneNumber, message);
+
+    return { success: true, message: "OTP sent via WhatsApp" };
+};
+
+// Verify OTP and reset password
+const verifyOTP = async (phoneNumber, otp, newPassword) => {
+    if (!phoneNumber || !otp || !newPassword) throwError("Phone number, OTP, and new password are required", 400);
+
+    const lab = await labs.findOne({ phoneNumber });
+    if (!lab) throwError("Doctor not found", 404);
+
+    if (otp !== lab.otp) throwError("Invalid OTP", 401);
+
+    lab.password = await hashPassword(newPassword);
+    await lab.save();
+
+    return { message: "Password changed successfully" };
+};
+
+const getLabDataService = async (phoneNumber) => {
+    try {
+        const lab = await labs.findOne({ phoneNumber });
+        if (!lab) {
+            const error = new Error("Lab not found");
+            error.statusCode = 404;
+            throw error;  // You must throw the error
+        }
+        return lab;
+    } catch (error) {
+        console.log(error);
+        throw error;  // Re-throw the error to be handled by the caller
+    }
 };
 
 module.exports = {
     register,
-    login
+    login,
+    changePassword,
+    forgetPassword,
+    verifyOTP,
+    getLabDataService
 };
