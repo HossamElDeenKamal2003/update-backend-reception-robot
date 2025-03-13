@@ -1,10 +1,14 @@
 const doctorsModel = require("../../../models/doctors.model");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+require('dotenv').config();
 const {sendWhatsAppOTP} = require("../../../config/whatsappClient");
 const generateUID = () => {
     return crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 3);
 };
+
+const JWT_SECRET = process.env.jwt_secret_key;
 
 const register = async (username, phoneNumber, email, buildNo, floorNo, address, password) => {
     const existDoctor = await doctorsModel.findOne({
@@ -13,11 +17,11 @@ const register = async (username, phoneNumber, email, buildNo, floorNo, address,
 
     if (existDoctor) {
         const error = new Error("User already exists");
-        error.statusCode = 400; // ✅ Proper status code
+        error.statusCode = 400;
         throw error;
     }
 
-    const UID = generateUID(); 
+    const UID = generateUID();
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -29,17 +33,18 @@ const register = async (username, phoneNumber, email, buildNo, floorNo, address,
         buildNo,
         floorNo,
         address,
-        password: hashedPassword, 
-        UID, 
+        password: hashedPassword,
+        UID,
     });
 
     await newDoctor.save();
+
     return { message: "Doctor registered successfully", newDoctor };
 };
 
 const login = async (phoneNumber, email, password) => {
     let doctor = null;
-
+    console.log(JWT_SECRET);
     if (email) {
         doctor = await doctorsModel.findOne({ email });
     } else {
@@ -48,18 +53,25 @@ const login = async (phoneNumber, email, password) => {
 
     if (!doctor) {
         const error = new Error("Doctor not found");
-        error.statusCode = 401; // ✅ Proper status code
+        error.statusCode = 401;
         throw error;
     }
 
     const isMatch = await bcrypt.compare(password, doctor.password);
     if (!isMatch) {
         const error = new Error("Incorrect Password");
-        error.statusCode = 401; // ✅ Proper status code
+        error.statusCode = 401;
         throw error;
     }
 
-    return { message: "Login Successful", doctor };
+    // Generate JWT token
+    const token = jwt.sign(
+        { id: doctor._id, role: "doctor" }, // Payload
+        JWT_SECRET, // Secret key
+        { expiresIn: "7d" } // Token expiration
+    );
+
+    return { message: "Login Successful", doctor, token };
 };
 
 const changePassword = async (phoneNumber, oldPassword, newPassword) => {

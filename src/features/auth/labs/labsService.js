@@ -2,7 +2,9 @@ const labs = require("../../../models/labs.model");
 const bcrypt = require("bcryptjs");
 const doctorsModel = require("../../../models/doctors.model");
 const { sendWhatsAppOTP } = require("../../../config/whatsappClient");
-
+const jwt = require("jsonwebtoken");
+require('dotenv').config();
+const JWT_SECRET = process.env.jwt_secret_key;
 // Utility function to hash passwords
 const hashPassword = async (password) => {
     const salt = await bcrypt.genSalt(10);
@@ -52,8 +54,12 @@ const login = async (phoneNumber, email, password) => {
 
     const isMatch = await bcrypt.compare(password, lab.password);
     if (!isMatch) throwError("Incorrect Password", 401);
-
-    return { message: "Login Successful", lab };
+    const token = jwt.sign(
+        { id: lab._id, role: "lab" }, // Payload
+        JWT_SECRET, // Secret key
+        { expiresIn: "7d" } // Token expiration
+    );
+    return { message: "Login Successful", lab, token };
 };
 
 // Change password for a doctor

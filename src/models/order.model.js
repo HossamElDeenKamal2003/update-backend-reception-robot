@@ -52,10 +52,12 @@ const orderSchema = new mongoose.Schema(
     },
     paid: {
       type: Number,
+        default: 0,
       required: false,
     },
     rest: {
-        type: Number
+        type: Number,
+        default: 0
     },
     labId: {
       type: mongoose.Schema.ObjectId,
@@ -80,11 +82,7 @@ const orderSchema = new mongoose.Schema(
       required: false,
       default: true,
     },
-    // docReady: {
-    //   type: Boolean,
-    //   required: false,
-    //   default: false,
-    // },
+
     media: {
         type: [],
         default: []

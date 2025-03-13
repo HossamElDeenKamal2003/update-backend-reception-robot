@@ -70,7 +70,8 @@ const labsSchema = new mongoose.Schema(
       default: [], // Default to an empty array
     },
       doctors: {
-        type: []
+        type: [mongoose.Schema.Types.ObjectId],
+          ref: "doctors",
       },
       otp: { type: String },
       otpExpiresAt: { type: Date },

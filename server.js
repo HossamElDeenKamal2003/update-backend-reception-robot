@@ -71,14 +71,17 @@ const userRouter = require("./src/features/auth/normal user/userRouter");
 const postsRoute = require("./src/features/posts/postsRouter");
 const chatRouter = require("./src/features/chat/chatRouter");
 const doctorsDashboard = require("./src/features/doctorDashboard/doctorRouter");
+const ordersRoute = require("./src/features/orders/orders.router");
+const labsOrders = require("./src/features/laboratory/lab.router");
 app.use('/doctors', doctorsRoutes);
 app.use('/labs', labsRoutes);
 app.use('/delivery', deliveryRoutes);
 app.use('/user', userRouter);
 app.use('/posts', postsRoute);
 app.use('/chat', chatRouter);
-app.use('/orders', doctorsDashboard);
-
+app.use('/docdash', doctorsDashboard);
+app.use('/orders', ordersRoute);
+app.use('/labdash', labsOrders);
 // Sample Route
 app.get('/', (req, res) => {
     res.send('Server is running!');

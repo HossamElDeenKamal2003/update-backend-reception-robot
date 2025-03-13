@@ -28,13 +28,15 @@ const doctorSchema = new mongoose.Schema({
         required: true
     },
     coverImage: {
-        type: String
+        type: String,
+        default: "",
     },
     address: {
         type: String
     },
     profileImage: {
-        type: String
+        type: String,
+        default: "",
     },
     password: {
         type: String,

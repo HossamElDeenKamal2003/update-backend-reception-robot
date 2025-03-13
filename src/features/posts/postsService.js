@@ -1,5 +1,8 @@
 const postsModel = require("../../models/posts.model");
 const mongoose = require('mongoose');
+const redisClient = require('../../config/redis.config');
+
+const { generatePostKey, generateAllPostsKey } = require('../../utility/redis.utility');
 const createPost = async (createdBy, createdByType, title, description, images = []) => {
     try {
         if (!createdBy || !title || !description || !createdByType) {
@@ -8,16 +11,34 @@ const createPost = async (createdBy, createdByType, title, description, images =
 
         const newPost = new postsModel({ createdBy, createdByType, title, description, images });
         await newPost.save();
+
+        // Cache the new post in Redis
+        await redisClient.set(generatePostKey(newPost._id), JSON.stringify(newPost));
+
+        // Invalidate the cache for all posts
+        await redisClient.del(generateAllPostsKey());
+
         return newPost;
     } catch (error) {
         console.error("Error in createPost:", error);
         throw error;
     }
 };
-
 const getAllPosts = async (userId) => {
     try {
-        const posts = await postsModel.find().sort({createdAt: -1}).lean(); // Convert to plain objects
+        const cacheKey = generateAllPostsKey();
+
+        // Check if posts are cached in Redis
+        const cachedPosts = await redisClient.get(cacheKey);
+        if (cachedPosts) {
+            return {
+                posts: JSON.parse(cachedPosts),
+                fromCache: true, // Data is from cache
+            };
+        }
+
+        // Fetch from database if not cached
+        const posts = await postsModel.find().sort({ createdAt: -1 }).lean();
 
         // Fetch all unique commenter IDs and types
         let commenterDetails = {};
@@ -50,7 +71,13 @@ const getAllPosts = async (userId) => {
             post.isReacted = post.usersReacted.includes(userId);
         });
 
-        return posts;
+        // Cache the posts in Redis
+        await redisClient.set(cacheKey, JSON.stringify(posts));
+
+        return {
+            posts,
+            fromCache: false, // Data is not from cache
+        };
     } catch (error) {
         console.error("Error in getAllPosts:", error);
         throw error;
@@ -62,7 +89,11 @@ const getAllPosts = async (userId) => {
 const createReact = async (postId, userId) => {
     try {
         const post = await postsModel.findById(postId);
-        if (!post) throw new Error("Post not found");
+        if (!post){
+            const error = new Error("Missing required fields.");
+            error.status = 404;
+            throw error;
+        }
 
         const index = post.usersReacted.indexOf(userId);
         if (index === -1) {
@@ -72,6 +103,10 @@ const createReact = async (postId, userId) => {
         }
 
         await post.save();
+
+        // Invalidate the cache for this post
+        await redisClient.del(generatePostKey(postId));
+
         return post;
     } catch (error) {
         console.error("Error in createReact:", error);
@@ -92,6 +127,10 @@ const createComment = async (postId, commenterId, commenterType, commentText) =>
 
         post.comments.push(newComment);
         await post.save();
+
+        // Invalidate the cache for this post
+        await redisClient.del(generatePostKey(postId));
+
         return post;
     } catch (error) {
         console.error("Error in createComment:", error);
@@ -110,6 +149,10 @@ const deletePost = async (postId, userId) => {
 
         await postsModel.deleteOne({ _id: postId });
 
+        // Invalidate the cache for this post and all posts
+        await redisClient.del(generatePostKey(postId));
+        await redisClient.del(generateAllPostsKey());
+
         return { message: "Post deleted successfully" };
     } catch (error) {
         console.error("Error in deletePost:", error);
@@ -119,14 +162,35 @@ const deletePost = async (postId, userId) => {
 
 const getUserPosts = async (userId) => {
     try {
-        return await postsModel.find({ createdBy: userId }).populate({
+        const cacheKey = generateUserPostsKey(userId);
+
+        // Check if user posts are cached in Redis
+        const cachedPosts = await redisClient.get(cacheKey);
+        if (cachedPosts) {
+            return {
+                posts: JSON.parse(cachedPosts),
+                fromCache: true, // Data is from cache
+            };
+        }
+
+        // Fetch from database if not cached
+        const posts = await postsModel.find({ createdBy: userId }).populate({
             path: "comments.commenterId", // Populate commenter details
             select: "name email createdByType", // Select only relevant fields
         });
+
+        // Cache the user posts in Redis
+        await redisClient.set(cacheKey, JSON.stringify(posts));
+
+        return {
+            posts,
+            fromCache: false, // Data is not from cache
+        };
     } catch (error) {
         console.error("Error in getUserPosts:", error);
         throw error;
     }
+
 };
 
 module.exports = {
