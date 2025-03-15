@@ -8,6 +8,8 @@ const generateUID = () => {
     return crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 3);
 };
 
+
+
 const createOrder = async (req, patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId) => {
     try {
         const doctorId = req.doctor.id;

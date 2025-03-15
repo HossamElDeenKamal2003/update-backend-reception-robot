@@ -67,6 +67,7 @@ const createOrder = async (doctorId, patientName, age, teethNo, sex, color, type
         };
     }
 };
+
 const getDoctorsorders = async (req) => {
     try {
         console.log("req", req.doctor);
@@ -180,4 +181,41 @@ const ordersBasedonStatus = async (req, status) => {
     }
 };
 
-module.exports = { createOrder, getDoctorsorders, getOrdersBasedOnDate, ordersBasedonStatus };
+const getMyContracts = async (req) => {
+    const labId = req.params.id;
+    const doctorId = req.doctor.id;
+
+    try {
+        const cachedContract = await redisClient.get(`contract:${doctorId}`);
+        if (cachedContract) {
+            return {
+                status: 200,
+                message: "Contract retrieved from cache",
+                contract: JSON.parse(cachedContract),
+                fromCache: true
+            };
+        }
+        const lab = await labs.findById(labId);
+        if (!lab) {
+            return { status: 404, message: "Lab not found", contract: null, fromCache: false };
+        }
+        const contract = lab.contracts.find(c => c.doctorId.toString() === doctorId);
+        if (!contract) {
+            return { status: 400, message: "You are not subscribed with this lab", contract: null, fromCache: false };
+        }
+        await redisClient.setEx(`contract:${doctorId}`, 3600, JSON.stringify(contract));
+        return {
+            status: 200,
+            message: "Contract retrieved successfully",
+            contract,
+            fromCache: false
+        };
+    } catch (error) {
+        console.error("Error in getMyContracts service:", error);
+        return { status: 500, message: error.message, contract: null, fromCache: false };
+    }
+};
+
+
+
+module.exports = { createOrder, getDoctorsorders, getOrdersBasedOnDate, ordersBasedonStatus, getMyContracts };

@@ -187,41 +187,26 @@ const addContractForDoctor = async (req) => {
     const labId = req.lab.id;
 
     try {
-        // Validate input
         if (!doctorId || !teethTypes || typeof teethTypes !== "object") {
             return { status: 400, message: "Invalid input: doctorId and teethTypes are required", contract: null };
         }
 
-        // Validate that each tooth type has a price (a valid number)
         for (const [toothType, price] of Object.entries(teethTypes)) {
             if (typeof price !== "number" || price < 0) {
                 return { status: 400, message: `Invalid price for tooth type: ${toothType}`, contract: null };
             }
         }
-
-        // Check if the lab exists
         const lab = await labsModel.findById(labId);
-        if (!lab) {
-            return { status: 404, message: "Lab not found", contract: null };
-        }
-
-        // Check if the doctor exists
+        if (!lab) return { status: 404, message: "Lab not found", contract: null };
         const doctor = await doctorsModel.findById(doctorId);
-        if (!doctor) {
-            return { status: 404, message: "Doctor not found", contract: null };
-        }
-
-        // Check if the doctor already has a contract with the lab
-        const existingContract = lab.contracts.find(contract => contract.doctorId.toString() === doctorId);
-        if (existingContract) {
-            return { status: 400, message: "A contract already exists for this doctor", contract: null };
-        }
-
-        // Add the contract to the lab's contracts array
-        lab.contracts.push({ doctorId, teethTypes });
+        if (!doctor) return { status: 404, message: "Doctor not found", contract: null };
+        const existingContract = lab.contracts.find(c => c.doctorId.toString() === doctorId);
+        if (existingContract) return { status: 400, message: "A contract already exists for this doctor", contract: null };
+        const newContract = { doctorId, teethTypes };
+        lab.contracts.push(newContract);
         await lab.save();
-
-        return { status: 200, message: "Contract added successfully", contract: { doctorId, teethTypes } };
+        await redisClient.del(`contract:${doctorId}`);
+        return { status: 200, message: "Contract added successfully", contract: newContract };
     } catch (error) {
         console.error("Error in addContractForDoctor service:", error);
         return { status: 500, message: error.message, contract: null };
@@ -253,7 +238,33 @@ const myDoctors = async (req) => {
     }
 };
 
-
+const updateContractForDoctor = async (req) => {
+    const { doctorId, teethTypes } = req.body;
+    const labId = req.lab.id;
+    try {
+        if (!doctorId || !teethTypes || typeof teethTypes !== "object") {
+            return { status: 400, message: "Invalid input: doctorId and teethTypes are required", contract: null };
+        }
+        for (const [toothType, price] of Object.entries(teethTypes)) {
+            if (typeof price !== "number" || price < 0) {
+                return { status: 400, message: `Invalid price for tooth type: ${toothType}`, contract: null };
+            }
+        }
+        const lab = await labsModel.findById(labId);
+        if (!lab) return { status: 404, message: "Lab not found", contract: null };
+        const contractIndex = lab.contracts.findIndex(c => c.doctorId.toString() === doctorId);
+        if (contractIndex === -1) return { status: 404, message: "Contract not found", contract: null };
+        lab.contracts[contractIndex].teethTypes = teethTypes;
+        await lab.save();
+        await redisClient.del(`contract:${doctorId}`);
+        const updatedContract = lab.contracts[contractIndex];
+        await redisClient.setEx(`contract:${doctorId}`, 3600, JSON.stringify(updatedContract));
+        return { status: 200, message: "Contract updated successfully", contract: updatedContract };
+    } catch (error) {
+        console.error("Error in updateContractForDoctor service:", error);
+        return { status: 500, message: error.message, contract: null };
+    }
+};
 
 module.exports = {
     getAllOrders,
@@ -263,5 +274,6 @@ module.exports = {
     addDoctor,
     removeDoctor,
     addContractForDoctor,
-    myDoctors
+    myDoctors,
+    updateContractForDoctor
 }
