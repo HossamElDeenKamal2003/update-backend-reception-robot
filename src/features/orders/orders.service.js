@@ -16,7 +16,7 @@ const createOrder = async (req, patientName, age, teethNo, sex, color, type, des
         if (!patientName || !teethNo || !sex || !color || !type || prova === undefined || !deadline || !labId) {
             throw new Error("All required fields must be provided");
         }
-    console.log("doctorId", doctorId);
+        console.log("doctorId", doctorId);
         // Check if the doctor is associated with the lab
         const lab = await labs.findOne({ _id: labId }).select("doctors");
         if (!lab || !lab.doctors.includes(doctorId)) {
@@ -53,6 +53,10 @@ const createOrder = async (req, patientName, age, teethNo, sex, color, type, des
         await redisClient.set(generateOrderKey(newOrder._id), JSON.stringify(newOrder));
         const cacheKey = generateLabOrdersKey(newOrder.labId);
         await redisClient.del(cacheKey);
+        if(global.io){
+            console.log("connected to socket to get orders with socket");
+            global.io.emit(`get-orders/${labId}`, {orders: newOrder});
+        }
         return {
             success: true,
             message: "Order created successfully",

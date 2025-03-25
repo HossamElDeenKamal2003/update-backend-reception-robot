@@ -2,68 +2,35 @@ require('dotenv').config();
 const express = require('express');
 const morgan = require('morgan');
 const cors = require('cors');
-const http = require('http'); // Import the http module
+const http = require('http');
 const app = express();
-const port = process.env.PORT || 5000; // Default to 5000 if PORT is not defined
+const port = process.env.PORT || 5000;
 const connectDB = require("./src/config/dbConnection");
 connectDB();
+
 // Middleware
-app.use(express.json()); // Parse JSON requests
-app.use(express.urlencoded({ extended: true })); // Parse URL-encoded data
-app.use(morgan('dev')); // Logger
-app.use(cors()); // Enable CORS
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan('dev'));
+app.use(cors());
+
+// Create HTTP server
 const server = http.createServer(app);
+
+// Socket.io setup
 const socketIo = require('socket.io');
-const io = socketIo(server);
-
-// Socket.IO connection
-io.on('connection', (socket) => {
-    console.log('A user connected:', socket.id);
-
-    // Join a room (e.g., user ID)
-    socket.on('joinRoom', (userId) => {
-        socket.join(userId);
-        console.log(`User ${userId} joined room`);
-    });
-
-    // Send and receive messages
-    socket.on('sendMessage', async (message) => {
-        try {
-            // Save the message to the database
-            const newMessage = await chatModel.create(message);
-
-            // Emit the message to the receiver
-            io.to(message.receiver).emit('receiveMessage', newMessage);
-
-            // Update status to 'delivered'
-            await chatModel.findByIdAndUpdate(newMessage._id, { status: 'delivered' });
-        } catch (error) {
-            console.error('Error sending message:', error);
-        }
-    });
-
-    // Mark messages as seen
-    socket.on('markAsSeen', async ({ sender, receiver }) => {
-        try {
-            await chatModel.updateMany(
-                { sender, receiver, status: 'delivered' },
-                { $set: { status: 'seen' } }
-            );
-
-            // Notify the sender that messages have been seen
-            io.to(sender).emit('messagesSeen', { sender, receiver });
-        } catch (error) {
-            console.error('Error marking messages as seen:', error);
-        }
-    });
-
-    // Handle disconnection
-    socket.on('disconnect', () => {
-        console.log('A user disconnected:', socket.id);
-    });
+const io = socketIo(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
 });
 
-//Routes
+// Make io globally available
+global.io = io;
+require('./src/config/socket/socketManager')(io);
+
+// Routes
 const doctorsRoutes = require("./src/features/auth/doctor/doctorRouter");
 const labsRoutes = require("./src/features/auth/labs/labsRouter");
 const deliveryRoutes = require("./src/features/auth/delivery/deliveryRouter");
@@ -74,6 +41,7 @@ const doctorsDashboard = require("./src/features/doctorDashboard/doctorRouter");
 const ordersRoute = require("./src/features/orders/orders.router");
 const labsOrders = require("./src/features/laboratory/lab.router");
 const deliveryWork = require("./src/features/delivery/delivery.router");
+
 app.use('/doctors', doctorsRoutes);
 app.use('/labs', labsRoutes);
 app.use('/delivery', deliveryRoutes);
@@ -84,6 +52,7 @@ app.use('/docdash', doctorsDashboard);
 app.use('/orders', ordersRoute);
 app.use('/labdash', labsOrders);
 app.use('/del', deliveryWork);
+
 // Sample Route
 app.get('/', (req, res) => {
     res.send('Server is running!');
@@ -95,8 +64,7 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Something went wrong!' });
 });
 
-// Start Server
-app.listen(port, () => {
+// Start Server with the HTTP server instance, not the Express app
+server.listen(port, () => {
     console.log(`🚀 SERVER RUNNING ON PORT ${port}`);
 });
- 

@@ -28,7 +28,6 @@ const getAllOrders = async (req) => {
         }
         const labOrders = await orders.find({ doctorId: { $in: labDoctors }, labId }).lean();
         await redisClient.set(cacheKey, JSON.stringify(labOrders), "EX", 600);
-
         return { status: 200, message: "Orders retrieved successfully", orders: labOrders };
     } catch (error) {
         console.error("Error in getAllOrders service:", error);
