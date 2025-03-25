@@ -8,17 +8,15 @@ const generateUID = () => {
     return crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 3);
 };
 
-
-
 const createOrder = async (req, patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId) => {
     try {
         const doctorId = req.doctor.id;
-
+        console.log("doctorId", doctorId);
         // Validate required fields
         if (!patientName || !teethNo || !sex || !color || !type || prova === undefined || !deadline || !labId) {
             throw new Error("All required fields must be provided");
         }
-
+    console.log("doctorId", doctorId);
         // Check if the doctor is associated with the lab
         const lab = await labs.findOne({ _id: labId }).select("doctors");
         if (!lab || !lab.doctors.includes(doctorId)) {
@@ -39,9 +37,11 @@ const createOrder = async (req, patientName, age, teethNo, sex, color, type, des
             price,
             status: prova ? "DoctorReady(p)" : "DoctorReady(f)",
             labId,
-            doc_id: doctorId, // Use the extracted doctorId
+            doc_id: doctorId,
+            delivery:[],
             deadline,
             prova,
+            taked: false,
             media: [],
             date: new Date(),
         });
@@ -102,7 +102,6 @@ const updateOrders = async (req, orderId, updateData) => {
         throw new Error(error.message || "Error in updateOrders");
     }
 };
-
 
 module.exports = {
     createOrder,

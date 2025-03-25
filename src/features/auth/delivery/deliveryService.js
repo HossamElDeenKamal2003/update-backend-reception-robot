@@ -2,6 +2,8 @@ const deliveryModel = require("../../../models/delivery.model");
 const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const { sendWhatsAppOTP } = require("../../../config/whatsappClient");
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.jwt_secret_key;
 
 // Utility function to generate a unique ID
 const generateUID = () => {
@@ -66,8 +68,13 @@ const login = async (phoneNumber, email, password) => {
         error.statusCode = 401;
         throw error;
     }
-
-    return { message: "Login Successful", delivery };
+    // Generate JWT token
+    const token = jwt.sign(
+        { id: delivery._id, role: "del" }, // Payload
+        JWT_SECRET, // Secret key
+        { expiresIn: "7d" } // Token expiration
+    );
+    return { message: "Login Successful", delivery, token };
 };
 
 // Change password for a delivery person

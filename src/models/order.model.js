@@ -88,10 +88,14 @@ const orderSchema = new mongoose.Schema(
         default: []
     },
     delivery: {
-        type: mongoose.Schema.Types.ObjectId,
+        type: [mongoose.Schema.Types.ObjectId],
         ref: "delivery",
         // required: true
     },
+      taked:{
+        type: Boolean,
+          default: false
+      },
       prova:{
         type: Boolean,
           required: true,

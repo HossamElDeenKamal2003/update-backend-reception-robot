@@ -73,6 +73,7 @@ const chatRouter = require("./src/features/chat/chatRouter");
 const doctorsDashboard = require("./src/features/doctorDashboard/doctorRouter");
 const ordersRoute = require("./src/features/orders/orders.router");
 const labsOrders = require("./src/features/laboratory/lab.router");
+const deliveryWork = require("./src/features/delivery/delivery.router");
 app.use('/doctors', doctorsRoutes);
 app.use('/labs', labsRoutes);
 app.use('/delivery', deliveryRoutes);
@@ -82,6 +83,7 @@ app.use('/chat', chatRouter);
 app.use('/docdash', doctorsDashboard);
 app.use('/orders', ordersRoute);
 app.use('/labdash', labsOrders);
+app.use('/del', deliveryWork);
 // Sample Route
 app.get('/', (req, res) => {
     res.send('Server is running!');

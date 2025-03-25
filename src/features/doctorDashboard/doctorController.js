@@ -4,8 +4,9 @@ const orderService = require('./doctorService');
 // Create a new order
 const createOrder = async (req, res) => {
     try {
+        const taked = false;
         const { doctorId, patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId } = req.body;
-        const result = await orderService.createOrder(doctorId, patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId);
+        const result = await orderService.createOrder(doctorId, taked, patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId);
 
         if (result.success) {
             res.status(201).json(result);

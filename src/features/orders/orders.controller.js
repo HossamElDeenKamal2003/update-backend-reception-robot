@@ -3,7 +3,6 @@ const orderService = require("./orders.service");
 const createOrder = async (req, res) => {
     try {
         const { patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId } = req.body;
-
         // Pass the entire `req` object to the service
         const result = await orderService.createOrder(req, patientName, age, teethNo, sex, color, type, description, price, prova, deadline, labId);
 

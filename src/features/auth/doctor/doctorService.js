@@ -113,7 +113,7 @@ const forgetPassword = async (phoneNumber) => {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // OTP expires in 10 minutes
 
-        // Store OTP in database
+        // // Store OTP in database
         doctor.otp = otp;
         doctor.otpExpiresAt = otpExpiresAt;
         await doctor.save();
