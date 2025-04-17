@@ -10,6 +10,7 @@ const orderSchema = new mongoose.Schema(
     doctorId: {
       type: String,
       required: true,
+        ref: "doctors"
     },
     patientName: {
       type: String,

@@ -10,9 +10,12 @@ const {
     removeDoctorController,
     addContractForDoctorController,
     myDoctorsController,
-    updateContractController
+    updateContractController,
+    getDoctorContractController,
+    markOrderController
 } = require('./lab.controller');
-router.post('/get-orders', authenticateLab, getAllOrdersController);
+const {getDoctorContract, markOrder} = require("./lab.service");
+router.get('/get-orders', authenticateLab, getAllOrdersController);
 router.get('/get-orders/:status', authenticateLab, getOrdersFilterController);
 router.get('/order/:id', authenticateLab, getOrderByIdController);
 router.patch('/update-order/:id', authenticateLab,updateTeethNumberController);
@@ -21,4 +24,6 @@ router.delete('/remove-doctor/:UID', authenticateLab, removeDoctorController);
 router.put('/add-contract', authenticateLab, addContractForDoctorController);
 router.get('/get-my-doctors', authenticateLab, myDoctorsController);
 router.patch('/contract', authenticateLab,updateContractController);
+router.get('/get-doctor-contract/:doctorId', authenticateLab, getDoctorContractController);
+router.post('/mark-orders/:orderId', authenticateLab, markOrderController);
 module.exports = router;

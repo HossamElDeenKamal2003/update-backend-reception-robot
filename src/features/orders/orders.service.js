@@ -2,7 +2,7 @@ const labs = require("../../models/labs.model");
 const orders = require("../../models/order.model");
 const redisClient = require("../../config/redis.config");
 const crypto = require("crypto");
-const { generateOrderKey, generateLabOrdersKey } = require("../../utility/redis.utility");
+const { generateOrderKey, generateDoctorOrdersKey, generateLabOrdersKey } = require("../../utility/redis.utility");
 
 const generateUID = () => {
     return crypto.randomBytes(2).toString("hex").toUpperCase().slice(0, 3);
@@ -12,22 +12,20 @@ const createOrder = async (req, patientName, age, teethNo, sex, color, type, des
     try {
         const doctorId = req.doctor.id;
         console.log("doctorId", doctorId);
-        // Validate required fields
+
         if (!patientName || !teethNo || !sex || !color || !type || prova === undefined || !deadline || !labId) {
             throw new Error("All required fields must be provided");
         }
-        console.log("doctorId", doctorId);
-        // Check if the doctor is associated with the lab
+
         const lab = await labs.findOne({ _id: labId }).select("doctors");
         if (!lab || !lab.doctors.includes(doctorId)) {
             throw new Error("You are not subscribed to this lab");
         }
 
-        // Create a new order
         const newOrder = new orders({
             UID: generateUID(),
             patientName,
-            doctorId, // Use the extracted doctorId
+            doctorId,
             age,
             teethNo,
             sex,
@@ -38,7 +36,7 @@ const createOrder = async (req, patientName, age, teethNo, sex, color, type, des
             status: prova ? "DoctorReady(p)" : "DoctorReady(f)",
             labId,
             doc_id: doctorId,
-            delivery:[],
+            delivery: [],
             deadline,
             prova,
             taked: false,
@@ -46,22 +44,30 @@ const createOrder = async (req, patientName, age, teethNo, sex, color, type, des
             date: new Date(),
         });
 
-        // Save to database
         await newOrder.save();
 
-        // Cache the order in Redis
+        // ✅ Cache the order by ID
         await redisClient.set(generateOrderKey(newOrder._id), JSON.stringify(newOrder));
-        const cacheKey = generateLabOrdersKey(newOrder.labId);
-        await redisClient.del(cacheKey);
-        if(global.io){
+
+        // ✅ Invalidate doctor's order list cache
+        const doctorOrdersKey = generateDoctorOrdersKey(doctorId);
+        await redisClient.del(doctorOrdersKey);
+
+        // ✅ Optional: Invalidate lab orders if needed
+        const labOrdersKey = generateLabOrdersKey(labId);
+        await redisClient.del(labOrdersKey);
+
+        // ✅ Emit to socket
+        if (global.io) {
             console.log("connected to socket to get orders with socket");
-            global.io.emit(`get-orders/${labId}`, {orders: newOrder});
+            global.io.emit(`get-orders/${labId}`, { orders: newOrder });
         }
+
         return {
             success: true,
             message: "Order created successfully",
             order: newOrder,
-            fromCache: false, // Data is not from cache
+            fromCache: false,
         };
     } catch (error) {
         console.error("Error in createOrder:", error);
@@ -107,7 +113,23 @@ const updateOrders = async (req, orderId, updateData) => {
     }
 };
 
+const getMyLabs = async(req)=>{
+    const doctorId = req.doctor.id;
+    try{
+        const myLabs = await labs.find({ doctors: doctorId });
+        return {
+            myLabs: myLabs,
+        }
+    }
+    catch (error){
+        console.log(error)
+        throw new Error("Error in getMyLabs");
+    }
+}
+
+
 module.exports = {
     createOrder,
     updateOrders,
+    getMyLabs
 };

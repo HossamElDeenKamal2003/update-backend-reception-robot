@@ -12,29 +12,96 @@ const getAllOrders = async (req) => {
         const labId = req.lab.id;
         console.log("Lab ID:", labId);
 
-        const lab = await labsModel.findById(labId).select("doctors").lean();
+        // 1. Verify Lab Exists
+        const lab = await labsModel.findById(labId).populate({
+            path: "doctors",
+            select: "_id username"
+        }).lean();
+
         if (!lab) {
-            return { status: 404, message: "Lab not found", orders: [] };
+            return {
+                status: 404,
+                message: "Lab not found",
+                orders: []
+            };
         }
-        const labDoctors = lab.doctors;
-        if (!labDoctors || labDoctors.length === 0) {
-            return { status: 200, message: "No doctors found", orders: [] };
+
+        // 2. Check for Associated Doctors
+        const labDoctors = lab.doctors.map(doc => doc._id);
+        if (labDoctors.length === 0) {
+            return {
+                status: 200,
+                message: "No doctors found for this lab",
+                orders: []
+            };
         }
-        const cacheKey = generateLabOrdersKey(labId);
+
+        // 3. Check Redis Cache
+        const cacheKey = `lab:${labId}:orders`;
         const cachedOrders = await redisClient.get(cacheKey);
-        if (cachedOrders) {
-            console.log("Returning cached orders from Redis");
-            return { status: 200, message: "Orders retrieved from cache", orders: JSON.parse(cachedOrders) };
+
+        // Optionally clear cache for testing
+        if (req.query.clearCache === 'true') {
+            await redisClient.del(cacheKey);
+            console.log("Cache cleared");
         }
-        const labOrders = await orders.find({ doctorId: { $in: labDoctors }, labId }).lean();
-        await redisClient.set(cacheKey, JSON.stringify(labOrders), "EX", 600);
-        return { status: 200, message: "Orders retrieved successfully", orders: labOrders };
+
+        if (cachedOrders && req.query.clearCache !== 'true') {
+            console.log("Returning cached orders");
+            return {
+                status: 200,
+                message: "Orders retrieved from cache",
+                orders: JSON.parse(cachedOrders),
+                cached: true
+            };
+        }
+
+        // 4. Fetch from Database with doctor population
+        const labOrders = await orders.find({
+            // doctorId: { $in: labDoctors },
+            labId
+        })
+            .populate({
+                path: 'doctorId',
+                select: 'username',
+                model: 'doctors'
+            })
+            .sort({ createdAt: -1 })
+            .lean();
+        console.log("???????????", labOrders);
+        // Transform orders to include doctor username
+        const transformedOrders = labOrders.map(order => ({
+            ...order,
+            doctorUsername: order.doctorId?.username || 'Unknown'
+        }));
+
+        // 5. Cache Results
+        if (transformedOrders.length > 0) {
+            await redisClient.set(
+                cacheKey,
+                JSON.stringify(transformedOrders),
+                "EX",
+                600 // 10 minutes
+            );
+        }
+
+        return {
+            status: 200,
+            message: "Orders retrieved successfully",
+            orders: transformedOrders,
+            cached: false
+        };
+
     } catch (error) {
         console.error("Error in getAllOrders service:", error);
-        return { status: 500, message: error.message, orders: [] };
+        return {
+            status: 500,
+            message: "Failed to retrieve orders: " + error.message,
+            orders: [],
+            error: error.stack
+        };
     }
 };
-
 const getOrdersFilter = async (req) => {
     try {
         const labId = req.lab.id;
@@ -182,33 +249,82 @@ const removeDoctor = async (req) => {
 };
 
 const addContractForDoctor = async (req) => {
-    const { doctorId, teethTypes } = req.body;
+    const { uid, teethTypes } = req.body;
     const labId = req.lab.id;
 
     try {
-        if (!doctorId || !teethTypes || typeof teethTypes !== "object") {
-            return { status: 400, message: "Invalid input: doctorId and teethTypes are required", contract: null };
+        console.log(uid, teethTypes);
+        // Validate inputs
+        if (!uid || !teethTypes || typeof teethTypes !== 'object') {
+            return { status: 400, message: "Doctor UID and teethTypes are required", contract: null };
         }
 
-        for (const [toothType, price] of Object.entries(teethTypes)) {
-            if (typeof price !== "number" || price < 0) {
-                return { status: 400, message: `Invalid price for tooth type: ${toothType}`, contract: null };
+        // Convert teethTypes to Map if it's a plain object
+        const teethTypesMap = teethTypes instanceof Map ?
+            teethTypes :
+            new Map(Object.entries(teethTypes));
+
+        // Validate prices
+        for (const [toothType, price] of teethTypesMap) {
+            if (typeof price !== 'number' || price < 0) {
+                return {
+                    status: 400,
+                    message: `Invalid price for ${toothType}: must be positive number`,
+                    contract: null
+                };
             }
         }
+
+        // Find doctor by UID
+        const doctor = await doctorsModel.findOne({ UID: uid });
+        if (!doctor) {
+            return { status: 404, message: "Doctor not found", contract: null };
+        }
+
+        // Find and update lab
         const lab = await labsModel.findById(labId);
-        if (!lab) return { status: 404, message: "Lab not found", contract: null };
-        const doctor = await doctorsModel.findById(doctorId);
-        if (!doctor) return { status: 404, message: "Doctor not found", contract: null };
-        const existingContract = lab.contracts.find(c => c.doctorId.toString() === doctorId);
-        if (existingContract) return { status: 400, message: "A contract already exists for this doctor", contract: null };
-        const newContract = { doctorId, teethTypes };
-        lab.contracts.push(newContract);
+        if (!lab) {
+            return { status: 404, message: "Lab not found", contract: null };
+        }
+
+        // Find existing contract index
+        const existingIndex = lab.contracts.findIndex(
+            c => c.doctorId.toString() === doctor._id.toString()
+        );
+
+        // Update or create contract
+        if (existingIndex !== -1) {
+            // Merge existing types with new ones
+            const existingTypes = lab.contracts[existingIndex].teethTypes || new Map();
+            teethTypesMap.forEach((value, key) => existingTypes.set(key, value));
+            lab.contracts[existingIndex].teethTypes = existingTypes;
+        } else {
+            // Add new contract
+            lab.contracts.push({
+                doctorId: doctor._id,
+                teethTypes: teethTypesMap
+            });
+        }
+
         await lab.save();
-        await redisClient.del(`contract:${doctorId}`);
-        return { status: 200, message: "Contract added successfully", contract: newContract };
+        await redisClient.del(`contract:${doctor._id}`);
+
+        return {
+            status: 200,
+            message: "Contract saved successfully",
+            contract: {
+                doctorId: doctor._id,
+                teethTypes: Object.fromEntries(teethTypesMap)
+            }
+        };
+
     } catch (error) {
-        console.error("Error in addContractForDoctor service:", error);
-        return { status: 500, message: error.message, contract: null };
+        console.error("Error in addContractForDoctor:", error);
+        return {
+            status: 500,
+            message: error.message || "Internal server error",
+            contract: null
+        };
     }
 };
 
@@ -265,6 +381,129 @@ const updateContractForDoctor = async (req) => {
     }
 };
 
+const getDoctorContract = async (req) => {
+    const uid = req.params.doctorId;
+    const role = req.lab.role;
+    const labId = req.lab.id;
+
+    try {
+        if (role !== "lab") {
+            return { status: 401, message: "Unauthorized" };
+        }
+        console.log("uid", uid);
+        const doctor = await doctorsModel.findOne({ UID: uid }).select("_id");
+        console.log(doctor)
+        if (!doctor) {
+            return { status: 404, message: "Doctor not found" };
+        }
+
+        const doctorIdStr = doctor._id.toString();
+
+        const lab = await labsModel.findById(labId).select('contracts').lean();
+
+        if (!lab) {
+            return { status: 404, message: "Lab not found" };
+        }
+
+        const contract = lab.contracts.find(
+            (d) => d.doctorId?.toString() === doctorIdStr
+        );
+
+        return {
+            status: 200,
+            contract: contract || null,
+        };
+    } catch (error) {
+        console.error(error);
+        return {
+            status: 500,
+            message: error.message,
+            contract: null
+        };
+    }
+};
+
+const markOrder = async (req) => {
+    const labId = req.lab.id;
+    const role = req.lab.role;
+    const orderId = req.params.orderId; // Changed from doctorId to orderId
+    try {
+        // 1. Authorization Check
+        if (role !== "lab") {
+            return {
+                status: 401,
+                message: "Unauthorized",
+                success: false
+            };
+        }
+
+        // 2. Find the Order
+        const order = await orders.findById(orderId);
+        if (!order) {
+            return {
+                status: 404,
+                message: "Order not found",
+                success: false
+            };
+        }
+
+        // 3. Verify Lab Ownership (optional - uncomment if needed)
+        // if (order.labId.toString() !== labId.toString()) {
+        //     return {
+        //         status: 403,
+        //         message: "Not authorized to modify this order",
+        //         success: false
+        //     };
+        // }
+
+        // 4. Update Status
+        if (order.status.includes("(p)")) {
+            order.status = "lab ready(p)";
+        } else if (order.status.includes("(f)")) {
+            order.status = "lab ready(f)";
+        } else {
+            return {
+                status: 400,
+                message: "Invalid order status for this operation",
+                success: false
+            };
+        }
+
+        // 5. Save the Updated Order
+        const updatedOrder = await order.save();
+
+        // 6. Clear Redis Cache
+        const cacheKeys = [
+            `lab:${labId}:orders`, // Lab's orders cache
+            generateOrderKey(orderId), // Specific order cache if you have it
+            generateLabOrdersKey(labId) // If you use this utility
+        ];
+
+        await Promise.all(
+            cacheKeys.map(key => redisClient.del(key).catch(err => {
+                console.error(`Error deleting cache key ${key}:`, err);
+            }))
+        );
+
+        // 7. Return Success Response
+        return {
+            status: 200,
+            message: "Order marked as Lab Ready and cache cleared",
+            success: true,
+            order: updatedOrder
+        };
+
+    } catch (error) {
+        console.error("Error in markOrder:", error);
+        return {
+            status: 500,
+            message: error.message || "Internal server error",
+            success: false,
+            error: error.stack
+        };
+    }
+};
+
 module.exports = {
     getAllOrders,
     getOrdersFilter,
@@ -274,5 +513,7 @@ module.exports = {
     removeDoctor,
     addContractForDoctor,
     myDoctors,
-    updateContractForDoctor
+    updateContractForDoctor,
+    getDoctorContract,
+    markOrder
 }

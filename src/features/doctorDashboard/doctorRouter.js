@@ -16,4 +16,5 @@ router.get('/date', authenticateDoctor, doctorDashboard.getOrdersBasedOnDate);
 // Get orders for a doctor based on status
 router.get('/status',authenticateDoctor, doctorDashboard.ordersBasedonStatus);
 router.get('/contract/:id', authenticateDoctor, doctorDashboard.getMyContractsController);
+router.get('/order/:orderId', authenticateDoctor, doctorDashboard.getOrderById)
 module.exports = router;

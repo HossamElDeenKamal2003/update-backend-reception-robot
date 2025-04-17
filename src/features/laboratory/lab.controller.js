@@ -1,4 +1,4 @@
-const { getAllOrders, getOrdersFilter, getOrderById, updateTeethNumber, addDoctor, removeDoctor, addContractForDoctor, myDoctors, updateContractForDoctor } = require("./lab.service");
+const { getAllOrders, getOrdersFilter, markOrder, getDoctorContract, getOrderById, updateTeethNumber, addDoctor, removeDoctor, addContractForDoctor, myDoctors, updateContractForDoctor } = require("./lab.service");
 const asyncHandler = require("express-async-handler");
 
 const getAllOrdersController = asyncHandler(async (req, res) => {
@@ -54,6 +54,14 @@ const updateContractController = async (req, res) => {
     const response = await updateContractForDoctor(req);
     res.status(response.status).json(response);
 };
+const getDoctorContractController = async(req, res)=>{
+    const response = await getDoctorContract(req);
+    res.status(response.status).json(response);
+}
+const markOrderController = async(req, res)=>{
+    const response = await markOrder(req);
+    res.status(response.status).json(response);
+}
 
     module.exports = {
     getAllOrdersController,
@@ -64,5 +72,7 @@ const updateContractController = async (req, res) => {
     removeDoctorController,
     addContractForDoctorController,
         myDoctorsController,
-        updateContractController
+        updateContractController,
+        getDoctorContractController,
+        markOrderController
 };

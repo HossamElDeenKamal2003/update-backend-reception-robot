@@ -12,4 +12,5 @@ router.patch('/orders/:id/take', authenticateDel, DeliveryController.takeOrder);
 // Complete a delivery task
 router.post('/orders/end-task/:orderId', authenticateDel, DeliveryController.endTask);
 
+router.get('/myOrders', authenticateDel, DeliveryController.myOrders);
 module.exports = router;

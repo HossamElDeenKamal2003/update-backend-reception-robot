@@ -159,11 +159,12 @@ const ordersBasedonStatus = async (req, status) => {
 
         let query = { doctorId: doctorId };
 
-        // If status is "docready", include both "docready (f)" and "docready (p)"
+        // If status is "docready", include both "DoctorReady(f)" and "DoctorReady(p)"
         if (status === "docready") {
             query.status = { $in: ["DoctorReady(f)", "DoctorReady(p)"] };
         } else {
-            query.status = status;
+            // Use regex to search for statuses that include the given status string
+            query.status = { $regex: status, $options: 'i' }; // 'i' for case-insensitive search
         }
 
         const ordersD = await orders.find(query);
@@ -216,6 +217,36 @@ const getMyContracts = async (req) => {
     }
 };
 
+const getOrderById = async(req)=>{
+    const orderId = req.params.orderId;
+    const role = req.doctor.role;
+    const doctorId = req.doctor.id;
+    try{
+        if(role !== "doctor"){
+            const error = new Error("Unauthorized");
+            error.status = 401;
+            throw error;
+        }
+        const orderData = await orders.findOne({ _id: orderId });
+        if(doctorId !== orderData.doctorId){
+            const error = new Error("Unauthorized");
+            error.status = 401;
+            throw error;
+        }
+        if(!orderData){
+            const error = new Error("Order Not Found");
+            error.status = 400;
+            throw error;
+        }
+        return {
+            status: 200,
+            order: orderData
+        }
+    }
+    catch (error){
+        console.log(error);
+        throw new Error(error.message);
+    }
+}
 
-
-module.exports = { createOrder, getDoctorsorders, getOrdersBasedOnDate, ordersBasedonStatus, getMyContracts };
+module.exports = { createOrder, getDoctorsorders, getOrderById, getOrdersBasedOnDate, ordersBasedonStatus, getMyContracts };

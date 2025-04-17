@@ -67,11 +67,21 @@ const getMyContractsController = async (req, res) => {
         res.status(400).json({ message: error.message });
     }
 };
+const getOrderById = async (req, res) => {
+    try {
+        const response = await orderService.getOrderById(req);
+        res.status(response.status).json(response);
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
 
 module.exports = {
     createOrder,
     getDoctorsorders,
     getOrdersBasedOnDate,
     ordersBasedonStatus,
-    getMyContractsController
+    getMyContractsController,
+    getOrderById
 };
