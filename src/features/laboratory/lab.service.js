@@ -504,6 +504,184 @@ const markOrder = async (req) => {
     }
 };
 
+const updatePrice = async (req) => {
+    try {
+        const { role, id: labId } = req.lab;
+        const { orderId, paied } = req.body;
+
+        // 1. Validate input
+        if (!orderId) {
+            return {
+                status: 400,
+                success: false,
+                message: "Order ID is required",
+            };
+        }
+        if (typeof paied !== "number" || paied < 0) {
+            return {
+                status: 400,
+                success: false,
+                message: "Paid amount must be a non-negative number",
+            };
+        }
+        if (role !== "lab") {
+            return {
+                status: 401,
+                success: false,
+                message: "Unauthorized access",
+            };
+        }
+
+        // 2. Find and validate order
+        const order = await orders.findOne({ _id: orderId, labId });
+        if (!order) {
+            return {
+                status: 404,
+                success: false,
+                message: "Order not found or not associated with this lab",
+            };
+        }
+
+        // 3. Validate payment amount
+        if (paied > order.price) {
+            return {
+                status: 400,
+                success: false,
+                message: "Paid amount cannot exceed total price",
+            };
+        }
+
+        // 4. Update order
+        order.paid = paied;
+        order.rest = order.price - paied;
+        const updatedOrder = await order.save();
+
+        // 5. Clear Redis cache
+        const cacheKeys = [
+            `lab:${labId}:orders`, // Cache for getAllOrders
+            generateOrderKey(orderId), // Cache for getOrderById
+            generateLabOrdersKey(labId), // Cache for getOrdersFilter
+        ];
+
+        await Promise.all(
+            cacheKeys.map((key) =>
+                redisClient.del(key).catch((err) => {
+                    console.error(`Error deleting cache key ${key}:`, err);
+                })
+            )
+        );
+
+        // 6. Return success response
+        return {
+            status: 200,
+            success: true,
+            message: "Order price updated successfully and cache cleared",
+            order: updatedOrder,
+        };
+    } catch (error) {
+        console.error("Error updating price:", error);
+        return {
+            status: 500,
+            success: false,
+            message: error.message || "Internal server error",
+            error: error.stack,
+        };
+    }
+};
+
+const billingService = async (req) => {
+    const labId = req.lab.id;
+    const role = req.lab.role;
+    const { startDate, endDate } = req.query;
+
+    try {
+        // Validate role
+        if (role !== 'lab') {
+            return {
+                status: 401,
+                message: "Unauthorized - Lab access only"
+            };
+        }
+
+        // Build date filter if provided
+        const dateFilter = {};
+        if (startDate) {
+            dateFilter.$gte = new Date(startDate);
+        }
+        if (endDate) {
+            dateFilter.$lte = new Date(endDate);
+            // Include the entire end day by setting time to 23:59:59
+            dateFilter.$lte.setHours(23, 59, 59, 999);
+        }
+
+        // Build the query
+        const query = { labId: labId };
+        if (startDate || endDate) {
+            query.createdAt = dateFilter;
+        }
+
+        // Get all orders for this lab with optional date filtering
+        const labOrders = await orders.find(query).select("price paid rest doctorId createdAt");
+
+        // Extract unique doctor IDs
+        const doctorIds = [...new Set(labOrders.map(order => order.doctorId.toString()))];
+
+        // Get doctor details
+        const doctorsData = await doctorsModel.find({
+            _id: { $in: doctorIds }
+        }).select("username phoneNumber");
+
+        // Create a map for quick doctor lookup
+        const doctorMap = {};
+        doctorsData.forEach(doctor => {
+            doctorMap[doctor._id.toString()] = doctor;
+        });
+
+        // Calculate totals
+        const billSummary = {
+            totalOrders: labOrders.length,
+            totalRevenue: labOrders.reduce((sum, order) => sum + (order.price || 0), 0),
+            totalPaid: labOrders.reduce((sum, order) => sum + (order.paid || 0), 0),
+            totalRest: labOrders.reduce((sum, order) => sum + (order.rest || 0), 0),
+            byDoctor: {},
+            dateRange: {
+                startDate: startDate || null,
+                endDate: endDate || null
+            }
+        };
+
+        // Group by doctor
+        labOrders.forEach(order => {
+            const doctorId = order.doctorId.toString();
+            if (!billSummary.byDoctor[doctorId]) {
+                billSummary.byDoctor[doctorId] = {
+                    doctor: doctorMap[doctorId] || { username: 'Unknown Doctor', phoneNumber: 'N/A' },
+                    totalOrders: 0,
+                    totalAmount: 0,
+                    totalPaid: 0,
+                    totalRest: 0
+                };
+            }
+
+            billSummary.byDoctor[doctorId].totalOrders++;
+            Math.round(billSummary.byDoctor[doctorId].totalAmount += order.price) || 0;
+            Math.round(billSummary.byDoctor[doctorId].totalPaid += order.paid) || 0;
+            Math.round(billSummary.byDoctor[doctorId].totalRest += order.price - order.paid) || 0;
+        });
+
+        return {
+            status: 200,
+            message: "Bill data retrieved successfully",
+            data: billSummary
+        };
+    } catch (error) {
+        console.error("Error in getBill:", error);
+        return {
+            status: 500,
+            message: error.message
+        };
+    }
+};
 module.exports = {
     getAllOrders,
     getOrdersFilter,
@@ -515,5 +693,7 @@ module.exports = {
     myDoctors,
     updateContractForDoctor,
     getDoctorContract,
-    markOrder
+    markOrder,
+    updatePrice,
+    billingService
 }

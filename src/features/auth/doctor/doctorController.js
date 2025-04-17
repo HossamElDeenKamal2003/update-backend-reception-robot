@@ -101,12 +101,8 @@ const verifyOTPController = asyncHandler(async (req, res) => {
 });
 
 const getDoctordataController = asyncHandler(async (req, res) => {
-    const { phoneNumber } = req.body;
-    if(!phoneNumber){
-        return res.status(400).json({ message: "Please provide phoneNumber" });
-    }
     try{
-        const doctor = await getDoctordata(phoneNumber);
+        const doctor = await getDoctordata(req);
         return res.status(200).json({ doctor : doctor });
     }
     catch(error){

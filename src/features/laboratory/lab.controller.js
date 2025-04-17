@@ -1,4 +1,4 @@
-const { getAllOrders, getOrdersFilter, markOrder, getDoctorContract, getOrderById, updateTeethNumber, addDoctor, removeDoctor, addContractForDoctor, myDoctors, updateContractForDoctor } = require("./lab.service");
+const { getAllOrders, getOrdersFilter, billingService, markOrder, updatePrice, getDoctorContract, getOrderById, updateTeethNumber, addDoctor, removeDoctor, addContractForDoctor, myDoctors, updateContractForDoctor } = require("./lab.service");
 const asyncHandler = require("express-async-handler");
 
 const getAllOrdersController = asyncHandler(async (req, res) => {
@@ -62,8 +62,57 @@ const markOrderController = async(req, res)=>{
     const response = await markOrder(req);
     res.status(response.status).json(response);
 }
+// In your controller:
+const updatePriceController = async (req, res) => {
+    const result = await updatePrice(req);
 
-    module.exports = {
+    if (!result.success) {
+        // Determine appropriate status code
+        let statusCode = 500;
+        if (result.message.includes("Unauthorized")) statusCode = 403;
+        if (result.message.includes("not found")) statusCode = 404;
+        if (result.message.includes("required") || result.message.includes("must be")) statusCode = 400;
+
+        return res.status(statusCode).json({
+            message: result.message,
+            error: result.error?.message
+        });
+    }
+
+    return res.status(200).json({
+        message: result.message,
+        order: result.order
+    });
+};
+
+const getBillcontroller = async (req, res) => {
+    try {
+        // Verify required role
+        if (req.lab.role !== 'lab') {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden - Lab access only"
+            });
+        }
+
+        const response = await billingService(req);
+
+        return res.status(response.status).json({
+            success: response.status === 200,
+            message: response.message,
+            data: response.data || null
+        });
+
+    } catch (error) {
+        console.error("Error in billing controller:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
+    }
+};
+
+module.exports = {
     getAllOrdersController,
     getOrdersFilterController,
     getOrderByIdController,
@@ -74,5 +123,7 @@ const markOrderController = async(req, res)=>{
         myDoctorsController,
         updateContractController,
         getDoctorContractController,
-        markOrderController
+        markOrderController,
+        updatePriceController,
+    getBillcontroller
 };

@@ -170,6 +170,7 @@ const verifyOTP = async (phoneNumber, otp, newPassword) => {
 };
 
 const getDoctordata = async(phoneNumber)=>{
+    const token = req.doctor
     try{
         const doctor = await doctorsModel.findOne({phoneNumber});
         if(!doctor){

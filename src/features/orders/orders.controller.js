@@ -2,7 +2,6 @@ const orderService = require("./orders.service");
 
 const createOrder = async (req, res) => {
     try {
-        // Extract form fields
         const {
             patientName,
             age,
@@ -11,44 +10,47 @@ const createOrder = async (req, res) => {
             color,
             type,
             description,
-            price,
             prova,
             deadline,
             labId
         } = req.body;
 
-        // Convert values if needed (e.g., from string to boolean/number)
-        const parsedProva = prova === "true";
-        const parsedAge = age ? parseInt(age) : undefined;
+        // Validate required fields at controller level too
+        if (!patientName || !teethNo || !sex || !color || !type || prova === undefined || !deadline || !labId) {
+            return res.status(400).json({
+                success: false,
+                message: "All required fields must be provided"
+            });
+        }
 
-        // Handle file uploads from req.files if needed
-        // const media = req.files?.media || [];
-
-        const result = await orderService.createOrder(
+        const response = await orderService.createOrder(
             req,
             patientName,
-            parsedAge,
+            age,
             teethNo,
             sex,
             color,
             type,
             description,
-            price,
-            parsedProva,
+            prova,
             deadline,
             labId
         );
 
-        if (result.success) {
-            res.status(201).json(result);
-        } else {
-            res.status(400).json(result);
-        }
+        // Use the status code from the service response
+        return res.status(response.status).json({
+            success: response.success,
+            message: response.message,
+            data: response.data
+        });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        console.error("Error in createOrder controller:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error"
+        });
     }
 };
-
 const updateOrderController = async (req, res) => {
     try {
         const orderId = req.params.id; // Get order ID from URL

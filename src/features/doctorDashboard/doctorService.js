@@ -222,6 +222,7 @@ const getOrderById = async(req)=>{
     const role = req.doctor.role;
     const doctorId = req.doctor.id;
     try{
+        console.log(role)
         if(role !== "doctor"){
             const error = new Error("Unauthorized");
             error.status = 401;

@@ -12,7 +12,9 @@ const {
     myDoctorsController,
     updateContractController,
     getDoctorContractController,
-    markOrderController
+    markOrderController,
+    updatePriceController,
+    getBillcontroller
 } = require('./lab.controller');
 const {getDoctorContract, markOrder} = require("./lab.service");
 router.get('/get-orders', authenticateLab, getAllOrdersController);
@@ -26,4 +28,6 @@ router.get('/get-my-doctors', authenticateLab, myDoctorsController);
 router.patch('/contract', authenticateLab,updateContractController);
 router.get('/get-doctor-contract/:doctorId', authenticateLab, getDoctorContractController);
 router.post('/mark-orders/:orderId', authenticateLab, markOrderController);
+router.patch('/update-prices', authenticateLab, updatePriceController);
+router.get('/get-bill', authenticateLab, getBillcontroller);
 module.exports = router;
