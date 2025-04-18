@@ -13,7 +13,15 @@ class DeliveryService {
                     { status: { $regex: '^DoctorReady' } },
                     { status: { $regex: '^LabReady' } }
                 ]
-            }).lean();
+            }) .populate({
+                path: "doctorId",
+                select: "UID username phoneNumber address floorNo buildNo"
+            })
+                .populate({
+                    path: "labId",
+                    select: "UID username phoneNumber address floorNo buildNo"
+                })
+
 
             return {
                 success: true,
@@ -34,11 +42,12 @@ class DeliveryService {
 
     static async takeOrder(deliveryId, orderId) {
         try {
-            const updatedOrder = await ordersModel.findByIdAndUpdate(
-                orderId,
+            const updatedOrder = await ordersModel.findOneAndUpdate(
+                { _id: orderId, taked: false },
                 { taked: true, delivery: deliveryId },
                 { new: true }
             );
+
 
             if (!updatedOrder) {
                 return {
